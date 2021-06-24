@@ -6,3 +6,5 @@ reports/*
 notes.txt
 queries_backup.txt
 instructions.md
+__pycache__
+*.pyc
