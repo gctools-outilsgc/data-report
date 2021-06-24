@@ -1,0 +1,36 @@
+FROM python:3
+
+COPY requirements.txt requirements.txt
+
+RUN pip install -r requirements.txt
+
+COPY report.py report.py
+
+#All the config files to be eventually removed
+COPY collab/config.py collab/config.py
+COPY google_analytics/client_secrets.json google_analytics/client_secrets.json
+COPY wiki/config.py wiki/config.py
+
+
+COPY collab/__init__.py collab/__init__.py
+COPY collab/gccollab.py collab/gccollab.py
+COPY collab/report_generator.py collab/report_generator.py
+COPY collab/utils.py collab/utils.py
+
+COPY google_analytics/__init__.py google_analytics/__init__.py
+COPY google_analytics/create_service.py google_analytics/create_service.py
+COPY google_analytics/ga.py google_analytics/ga.py
+COPY google_analytics/report_generator.py google_analytics/report_generator.py
+
+COPY reports reports
+
+COPY message/kube_connect.py message/kube_connect.py
+COPY message/__init__.py message/__init__.py
+COPY message/message.py message/message.py
+COPY message/report_generator.py message/report_generator.py
+
+COPY wiki/kube_connect.py wiki/kube_connect.py
+COPY wiki/__init__.py wiki/__init__.py
+COPY wiki/utils.py wiki/utils.py
+COPY wiki/gcwiki.py wiki/gcwiki.py
+COPY wiki/report_generator.py wiki/report_generator.py

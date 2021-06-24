@@ -1,0 +1,9 @@
+version: '2'
+services:
+  terminal:
+#    build: .
+    image: data-report:latest
+    volumes: 
+      - .:/script
+    command: sleep 36000
+    
