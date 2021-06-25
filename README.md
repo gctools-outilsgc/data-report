@@ -14,7 +14,7 @@ The resulting reports can be found in the folder 'reports'.
 
 ## Additional notes
 
-It was previously attempted to dockerize the repo and the remnants of that remain for hopeful future use. 
+The docker version works provided a kubectl binary is made available at /usr/local/bin/kubectl  along with the config file in ~/.kube/config which has the relevant k8s clusters registered
 
 A GUI was started but not the focus, it also remains in its partiality. 
 
