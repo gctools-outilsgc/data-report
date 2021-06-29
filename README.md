@@ -16,7 +16,14 @@ The resulting reports can be found in the folder 'reports'.
 
 The docker version works provided a kubectl binary is made available at /usr/local/bin/kubectl  along with the config file in ~/.kube/config which has the relevant k8s clusters registered
 
-A GUI was started but not the focus, it also remains in its partiality. 
+If you don't have access to the kubernetes clusters set up, the easiest way would be using:
+
+`az aks get-credentials -g <name of the resource group that contains the aks cluster> -n <cluster name>`
+
+and then make sure that the names the clusters are registered under in your config match the --context parameter in kube_connect.py
+
+
+Ensure you have access to the collab db server on the mysql port (3306)
 
 
 ## Architecture
