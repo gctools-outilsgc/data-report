@@ -25,6 +25,11 @@ and then make sure that the names the clusters are registered under in your conf
 
 Ensure you have access to the collab db server on the mysql port (3306)
 
+### Windows notes
+
+python should be added to the PATH variable to be able to run the scripts from command line
+
+kubectl must be added to PATH or be in some other way accessible from the terminal to allow the scripts to run kubectl port-forward commands
 
 ## Architecture
 
