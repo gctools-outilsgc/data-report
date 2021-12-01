@@ -25,6 +25,7 @@ class Helpdesk:
         "2100000896": 7, #GCaccount
         "2100000673": 99, #gcConsult - get the proper one from the application field
         "2100000869": 6, #gcExchange
+        "2100000979": 8, #rapid testing
         "None": 5 #other, no tool assigned
     }
 
@@ -42,7 +43,7 @@ class Helpdesk:
     def __init__(self):
         self.AUTH = (config['apikey'], 'X')
         self.URL = "https://" + config['domain'] + ".freshdesk.com/api/v2/search/tickets?query="
-        self.tag_counts =  [[0] * 7 for i in range(8)] #creates 7 * 6 matrix
+        self.tag_counts =  [[0] * 7 for i in range(9)] #creates 7 * 6 matrix
         
     
     def calculate_counts(self, start, end):
