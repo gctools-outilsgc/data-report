@@ -19,3 +19,17 @@ def initialize_analyticsreporting():
     analytics = build('analyticsreporting', 'v4', credentials=credentials)
 
     return analytics
+
+def initialize_analyticsreporting_GA4():
+    """Initializes an Analytics Reporting GA4 service object.
+
+    Returns:
+    An authorized Analytics Reporting GA4 service object.
+    """
+    credentials = ServiceAccountCredentials.from_json_keyfile_name(
+        KEY_FILE_LOCATION, SCOPES)
+
+    # Build the service object.
+    analytics = build('analyticsdata', 'v1beta', credentials=credentials)
+
+    return analytics
