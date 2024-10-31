@@ -6,14 +6,14 @@ import pandas as pd
 class db_connection:
     
     def __init__(self):
-        db_command = "/usr/local/bin/kubectl port-forward --context CollabProd-admin -n wiki " + self.__get_name() + " 3306:3306"
+        db_command = "/usr/local/bin/kubectl port-forward --context CollabAKSProd-admin -n wiki " + self.__get_name() + " 3306:3306"
         self.port = 3306
         
         self.connect_to_database(db_command)
 
     #Not always the same name, so this method fetches the db name
     def __get_name(self):
-        cmd = check_output("/usr/local/bin/kubectl get pods --context CollabProd-admin -n wiki", shell=True) #maintains synch order
+        cmd = check_output("/usr/local/bin/kubectl get pods --context CollabAKSProd-admin -n wiki", shell=True) #maintains synch order
         list_of_db = cmd.decode().split("\n"[0])
 
         def startswith(var):
