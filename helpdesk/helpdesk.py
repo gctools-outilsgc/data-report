@@ -44,7 +44,7 @@ class Helpdesk:
     def __init__(self):
         self.AUTH = (config['apikey'], 'X')
         self.URL = "https://" + config['domain'] + ".freshdesk.com/api/v2/search/tickets?query="
-        self.tag_counts =  [[0] * 7 for i in range(9)] #creates 7 * 6 matrix
+        self.tag_counts =  [[0] * 7 for i in range(10)] #creates 7 * 6 matrix
         
     
     def calculate_counts(self, start, end):
