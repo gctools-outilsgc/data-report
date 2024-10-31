@@ -26,6 +26,7 @@ class Helpdesk:
         "2100000673": 99, #gcConsult - get the proper one from the application field
         "2100000869": 6, #gcExchange
         "2100000979": 8, #rapid testing
+        "21000000025": 9, # something else?
         "None": 5 #other, no tool assigned
     }
 
