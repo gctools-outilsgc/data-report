@@ -14,41 +14,117 @@ class wiki_db:
         self.conn = mysql.connector.connect(**config)
         self.cursor = self.conn.cursor()
 
+    def query_first(self, cursor, query):
+        cursor.execute(query)
+        result = cursor.fetchone()
+        val = result[0] if result else None
+        return val
+
     def mw_page_count(self, cursor):
+        return self.query_first(cursor, queries.query_mw_page_count())
+
+    def revisions_page_count(self, cursor):
+        return self.query_first(cursor, queries.query_mw_edited_page_count());
+
+    def total_edits(self, cursor):
+        return self.query_first(cursor, queries.query_total_edits())
+
+    def unique_edited_in_interval(self, cursor, interval, prev_interval=None):
+        return self.query_first(cursor, queries.query_unique_edited_in_interval(interval, prev_interval))
+
+    def total_edited_in_interval(self, cursor, interval, prev_interval=None):
+        return self.query_first(cursor, queries.query_total_edited_in_interval(interval, prev_interval))
+
+    def edited_with_percent_count(self):
+        try:
+            with self.conn as conn:  # Use context manager
+                with conn.cursor() as cursor:
+                    print()
+                    count = self.revisions_page_count(cursor)
+                    edits = self.total_edits(cursor)
+
+                    intervals = ["6 MONTH", "1 YEAR", "2 YEAR", "3 YEAR", "4 YEAR", "5 YEAR", "10 YEAR"]
+                    last_interval = None
+
+                    headers = ["Interval", "Start", "Edited Pages", "% Pages Edited", "Page Edits", "% Edits", "Cumulative Edited Pages", "% Cumulative Pages Edited", "Cumulative Page Edits", "% Cumulative Edits", "Months Since Last", "% Pages Edited/Month", "% Edits/Month"]
+                    print("|".join(headers))
+
+                    row_data = ["Total", "", count, 100, edits, 100, "-", "-", "-"]
+                    print("|".join(str(x) for x in row_data))
+
+                    for interval in intervals:
+                        unique_edited = self.unique_edited_in_interval(cursor, interval, last_interval)
+                        total_edited = self.total_edited_in_interval(cursor, interval, last_interval)
+                        cumulative_unique_edited = self.unique_edited_in_interval(cursor, interval, None)
+                        cumulative_total_edited = self.total_edited_in_interval(cursor, interval, None)
+                        
+                        months = 6
+                        if last_interval:
+                            cursor.execute(f"""SELECT PERIOD_DIFF(
+                                    DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL {last_interval}), '%Y%m'), 
+                                    DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL {interval}), '%Y%m')
+                                    )""")
+                            months = cursor.fetchone()[0]
+                        
+                        row_data = [
+                            f"{interval} ago",
+                            f"{f"until {last_interval} ago" if last_interval else 'today'}",
+                            unique_edited,
+                            round(unique_edited * 100 / count, 2),
+                            total_edited,
+                            round(total_edited * 100 / edits, 2),
+
+                            cumulative_unique_edited,
+                            round(cumulative_unique_edited * 100 / count, 2),
+                            cumulative_total_edited,
+                            round(cumulative_total_edited * 100 / edits, 2),
+
+                            months if months else "-",  
+                            round(unique_edited * 100 / count / months, 2) if months else "-",
+                            round(total_edited * 100 / edits / months, 2) if months else "-"
+                        ]
+                        
+                        print("|".join(str(x) for x in row_data))
+                        
+                        last_interval = interval
+                 
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+        finally:
+            pass
+  
+    def close_connection(self):
+        if hasattr(self, 'cursor') and self.cursor:
+            self.cursor.close()
+        if hasattr(self, 'conn') and self.conn.is_connected():
+            self.conn.close()
+        if hasattr(self, 'DB'):
+            self.DB.terminate()
+
+class queries:
+    def query_mw_page_count():
         # https://www.mediawiki.org/wiki/Manual:Article_count
-        query = """
+        return """
 SELECT count(distinct(page_id))
 FROM pagelinks
 INNER JOIN page ON pl_from = page_id
 WHERE page_namespace = 0
 AND page_is_redirect = 0;
   ;"""
-        cursor.execute(query)
-        result = cursor.fetchone()
-        count = result[0] if result else None
-        return count
 
-    def revisions_page_count(self, cursor):
-        query = f"""SELECT count(*) as edited FROM page WHERE page_namespace=0 and page_is_redirect=0"""
-        cursor.execute(query)
-        result = cursor.fetchone()
-        count = result[0] if result else None
-        return count
+    def query_mw_edited_page_count():
+        return f"""SELECT count(*) as edited FROM page WHERE page_namespace=0 and page_is_redirect=0"""
 
-    def total_edits(self, cursor):
-        query = """
+    def query_total_edits():
+        return """
 SELECT count(*) from revision
 JOIN page on rev_page = page_id
 WHERE page_namespace = 0
 AND page_is_redirect = 0;
   ;"""
-        cursor.execute(query)
-        result = cursor.fetchone()
-        count = result[0] if result else None
-        return count
 
-    def unique_edited_in_interval(self, cursor, interval, prev_interval=None):
-        query = f"""
+    def query_unique_edited_in_interval(interval, prev_interval=None):
+        return f"""
 SELECT count(*) AS edited FROM page p WHERE p.page_namespace=0 AND p.page_is_redirect=0 
   AND (
     SELECT rev_timestamp 
@@ -57,106 +133,11 @@ SELECT count(*) AS edited FROM page p WHERE p.page_namespace=0 AND p.page_is_red
       {f"AND r.rev_timestamp < DATE_SUB(CURDATE(), INTERVAL {prev_interval})" if prev_interval else ""}
   ) >= DATE_SUB(CURDATE(), INTERVAL {interval})
 """
-        cursor.execute(query)
-        result = cursor.fetchone()
-        count = result[0] if result else None
-        return count
 
-    def total_edited_in_interval(self, cursor, interval, prev_interval=None):
-        query = f"""
+    def query_total_edited_in_interval(interval, prev_interval=None):
+        return f"""
 SELECT count(*) FROM revision r 
 JOIN page p on r.rev_page = p.page_id WHERE p.page_namespace=0 
 AND p.page_is_redirect=0 and r.rev_timestamp >= DATE_SUB(CURDATE(), INTERVAL {interval})
 {f"AND r.rev_timestamp < DATE_SUB(CURDATE(), INTERVAL {prev_interval})" if prev_interval else ""}
 """
-        cursor.execute(query)
-        result = cursor.fetchone()
-        count = result[0] if result else None
-        return count
-
-    def edited_with_percent_count(self):
-        try:
-            with self.conn as conn:  # Use context manager
-                with conn.cursor() as cursor:
-                    count = self.revisions_page_count(cursor)
-                    edits = self.total_edits(cursor)
-                    print(f"Total Pages: {count}")
-                    print(f"Total Edits: {edits}")
-                    intervals = ["6 MONTH", "1 YEAR", "2 YEAR", "5 YEAR", "10 YEAR"]
-                    last_interval = None
-                    for interval in intervals:
-                        print()
-                        unique_edited = self.unique_edited_in_interval(cursor, interval, last_interval)
-                        print(f"Results for {interval}:")
-                        print(f"Edited Pages: {unique_edited}")
-                        print(f"Percentage of pages edited: {round(unique_edited * 100 / count, 2)}")
-                        total_edited = self.total_edited_in_interval(cursor, interval, last_interval)
-                        print(f"Page edits: {total_edited}")
-                        print(f"Percentage of edits: {round(total_edited * 100 / edits, 2)}")
-                        last_interval = interval
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-        finally:
-            pass
-  
-    def unedited_page_stats(self):
-        try:
-            # Function to generate the SQL query for unedited pages
-            def generate_query(interval):
-                query = f"""SELECT 
-                            (
-                                SELECT COUNT(*)
-                                FROM page
-                                WHERE page_namespace = 0 
-                                  AND page_is_redirect=0
-                                  AND page_id NOT IN (
-                                    SELECT rev_page 
-                                    FROM revision 
-                                    WHERE rev_timestamp >= DATE_SUB(CURDATE(), INTERVAL {interval})
-                                  )
-                            ) AS 'Unedited Pages',
-                            (SELECT COUNT(*) FROM page WHERE page_namespace = 0) AS 'Total Pages',
-                            ROUND(
-                                (
-                                    SELECT COUNT(*)
-                                    FROM page
-                                    WHERE page_namespace = 0 
-                                  AND page_is_redirect=0
-                                      AND page_id NOT IN (
-                                        SELECT rev_page 
-                                        FROM revision 
-                                        WHERE rev_timestamp >= DATE_SUB(CURDATE(), INTERVAL {interval})
-                                      )
-                                ) * 100 / (SELECT COUNT(*) FROM page WHERE page_namespace = 0 AND page_is_redirect=0), 2
-                            ) AS 'Percentage of Unedited Pages';"""
-                return query
-
-            # Run the queries for various time intervals
-            intervals = ["6 MONTH", "1 YEAR", "2 YEAR", "5 YEAR", "10 YEAR"]
-            for interval in intervals:
-                query = generate_query(interval)
-                self.cursor.execute(query)
-                results = self.cursor.fetchall()
-
-                # Process and use the results here (e.g., print, save to file, etc.)
-                print(f"Results for {interval}:")
-                for row in results:
-                    print(row)
-
-        except mysql.connector.Error as err:
-            if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
-                print("Something is wrong with your user name or password")
-            elif err.errno == errorcode.ER_BAD_DB_ERROR:
-                print("Database does not exist")
-            else:
-                print(err)
-        else:
-            self.conn.close()
-
-    def close_connection(self):
-        if hasattr(self, 'cursor') and self.cursor:
-            self.cursor.close()
-        if hasattr(self, 'conn') and self.conn.is_connected():
-            self.conn.close()
-        if hasattr(self, 'DB'):
-            self.DB.terminate()
