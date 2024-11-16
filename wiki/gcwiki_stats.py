@@ -15,10 +15,16 @@ class wiki_db:
         self.cursor = self.conn.cursor()
 
     def query_first(self, cursor, query):
-        cursor.execute(query)
-        result = cursor.fetchone()
-        val = result[0] if result else None
-        return val
+        try:
+            cursor.execute(query)
+            result = cursor.fetchone()
+            if result:
+                return result[0]
+            else:
+                raise ValueError(f"No results found for: {query}")  
+        except Exception as e:
+            print(f"ERROR: Query '{query}' failed with error: {e}") 
+            raise 
 
     def pages_created_in_interval(self, cursor, interval, prev_interval=None):
         return self.query_first(cursor, queries.query_pages_created_in_interval(interval, prev_interval))
@@ -47,9 +53,9 @@ class wiki_db:
                     edits = self.total_edits(cursor)
 
                     intervals = ["6 MONTH", "1 YEAR", "2 YEAR", "3 YEAR", "4 YEAR", "5 YEAR", "10 YEAR"]
+
                     last_interval = None
 
-                    # Add "Created Pages" to headers
                     headers = ["Interval", "Start", "Edited Pages", "% Pages Edited", "Page Edits", "% Edits", "Created Pages", 
                                "Cumulative Edited Pages", "% Cumulative Pages Edited", "Cumulative Page Edits", 
                                "% Cumulative Edits", "Months Since Last", "% Pages Edited/Month", "% Edits/Month"]
@@ -64,7 +70,6 @@ class wiki_db:
                         cumulative_unique_edited = self.unique_edited_in_interval(cursor, interval, None)
                         cumulative_total_edited = self.total_edited_in_interval(cursor, interval, None)
                         
-                        # Get the count of pages created in the interval
                         created_pages = self.pages_created_in_interval(cursor, interval, last_interval)
 
                         months = 6
@@ -75,7 +80,6 @@ class wiki_db:
                                     )""")
                             months = cursor.fetchone()[0]
                         
-                        # Add created_pages to row_data
                         row_data = [
                             f"{interval} ago",
                             f"{f"until {last_interval} ago" if last_interval else 'today'}",
@@ -83,7 +87,7 @@ class wiki_db:
                             round(unique_edited * 100 / count, 2),
                             total_edited,
                             round(total_edited * 100 / edits, 2),
-                            created_pages,  # Added here
+                            created_pages,
 
                             cumulative_unique_edited,
                             round(cumulative_unique_edited * 100 / count, 2),
@@ -98,6 +102,16 @@ class wiki_db:
                         print("|".join(str(x) for x in row_data))
                         
                         last_interval = interval
+
+                    print("\n\n")
+                    print("* 'Edited Pages' is the number of pages that have been edited in the given interval.")
+                    print("* 'Page Edits' is the total number of edits made in the given interval.")
+                    print("* 'Created Pages' is the number of pages created in the given interval.")
+                    print("* 'Cumulative Edited Pages' is the number of pages that have been edited since the beginning of the wiki.")
+                    print("* 'Cumulative Page Edits' is the total number of edits made since the beginning of the wiki.")
+                    print("* 'Months Since Last' is calculated as the number of months between the start of the current interval and the start of the previous interval.")
+                    print("* '/Month' calculations divide totals by the number of months in the interval.") 
+
                  
         except Exception as e:
             print(f"Unexpected error: {e}")
