@@ -5,5 +5,7 @@ services:
     image: data-report:latest
     volumes: 
       - .:/script
+      - /usr/local/bin/kubectl:/usr/local/bin/kubectl
+      - /home/vid/.kube/config:/root/.kube/config
     command: sleep 36000
     

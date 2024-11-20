@@ -1,12 +1,22 @@
-
 import mysql.connector
-from mysql.connector import errorcode
-
 from . import config
 from . import kube_connect
 
+import json
+
+intervals = ["6 MONTH", "1 YEAR", "2 YEAR", "3 YEAR", "4 YEAR", "5 YEAR", "10 YEAR"]
+report_file = 'report_data.json'
+
+class print_cursor:
+    query = None
+    def execute(self, query):
+        self.query = query
+
+    def fetchone(self):
+        return [{ 'query': self.query }]
+
 class wiki_db:
-    def __init__(self):
+    def connect(self):
         self.DB = kube_connect.db_connection()
         while (not bool(self.DB.check_connection())):
             continue 
@@ -44,79 +54,105 @@ class wiki_db:
     def total_edited_in_interval(self, cursor, interval, prev_interval=None):
         return self.query_first(cursor, queries.query_total_edited_in_interval(interval, prev_interval))
 
-    def edited_with_percent_count(self):
+    def months_since(self, cursor, interval, last_interval):
+        return self.query_first(cursor, queries.months_since(interval, last_interval))
+
+    def generate_edit_report(self, what_to_do):
+        print(f"Generating report step {what_to_do}")
+        if what_to_do == 'generate':
+           data = self.generate_data(print_cursor())
+           with open(report_file, 'w') as f:
+                json.dump(data, f)
+                print(f"Data written to {report_file}")
+                return
+
+        if what_to_do == 'process':
+            with open(report_file, 'r') as f:
+                data = json.load(f)
+                self.generate_report(data)
+                return
+
         try:
-            with self.conn as conn:  # Use context manager
+            self.connect()
+            with self.conn as conn:
                 with conn.cursor() as cursor:
-                    print()
-                    count = self.revisions_page_count(cursor)
-                    edits = self.total_edits(cursor)
-
-                    intervals = ["6 MONTH", "1 YEAR", "2 YEAR", "3 YEAR", "4 YEAR", "5 YEAR", "10 YEAR"]
-
-                    last_interval = None
-
-                    headers = ["Interval", "Start", "Edited Pages", "% Pages Edited", "Page Edits", "% Edits", "Created Pages", 
-                               "Cumulative Edited Pages", "% Cumulative Pages Edited", "Cumulative Page Edits", 
-                               "% Cumulative Edits", "Months Since Last", "% Pages Edited/Month", "% Edits/Month"]
-                    print("|".join(headers))
-
-                    row_data = ["Total", "", count, 100, edits, 100, "-", "-", "-", "-"]
-                    print("|".join(str(x) for x in row_data))
-
-                    for interval in intervals:
-                        unique_edited = self.unique_edited_in_interval(cursor, interval, last_interval)
-                        total_edited = self.total_edited_in_interval(cursor, interval, last_interval)
-                        cumulative_unique_edited = self.unique_edited_in_interval(cursor, interval, None)
-                        cumulative_total_edited = self.total_edited_in_interval(cursor, interval, None)
-                        
-                        created_pages = self.pages_created_in_interval(cursor, interval, last_interval)
-
-                        months = 6
-                        if last_interval:
-                            cursor.execute(f"""SELECT PERIOD_DIFF(
-                                    DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL {last_interval}), '%Y%m'), 
-                                    DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL {interval}), '%Y%m')
-                                    )""")
-                            months = cursor.fetchone()[0]
-                        
-                        row_data = [
-                            f"{interval} ago",
-                            f"{f"until {last_interval} ago" if last_interval else 'today'}",
-                            unique_edited,
-                            round(unique_edited * 100 / count, 2),
-                            total_edited,
-                            round(total_edited * 100 / edits, 2),
-                            created_pages,
-
-                            cumulative_unique_edited,
-                            round(cumulative_unique_edited * 100 / count, 2),
-                            cumulative_total_edited,
-                            round(cumulative_total_edited * 100 / edits, 2),
-
-                            months if months else "-",  
-                            round(unique_edited * 100 / count / months, 2) if months else "-",
-                            round(total_edited * 100 / edits / months, 2) if months else "-"
-                        ]
-                        
-                        print("|".join(str(x) for x in row_data))
-                        
-                        last_interval = interval
-
-                    print("\n\n")
-                    print("* 'Edited Pages' is the number of pages that have been edited in the given interval.")
-                    print("* 'Page Edits' is the total number of edits made in the given interval.")
-                    print("* 'Created Pages' is the number of pages created in the given interval.")
-                    print("* 'Cumulative Edited Pages' is the number of pages that have been edited since the beginning of the wiki.")
-                    print("* 'Cumulative Page Edits' is the total number of edits made since the beginning of the wiki.")
-                    print("* 'Months Since Last' is calculated as the number of months between the start of the current interval and the start of the previous interval.")
-                    print("* '/Month' calculations divide totals by the number of months in the interval.") 
-
-                 
+                    data = self.generate_data(cursor)
+                    self.generate_report(data)
         except Exception as e:
             print(f"Unexpected error: {e}")
         finally:
             pass
+
+    def generate_data(self, cursor):
+        q = {}
+
+        q['count'] = self.revisions_page_count(cursor)
+        q['edits'] = self.total_edits(cursor)
+
+        last_interval = None
+
+        for interval in intervals:
+            q[interval] = {}  
+            q[interval]['unique_edited'] = self.unique_edited_in_interval(cursor, interval, last_interval)
+            q[interval]['total_edited'] = self.total_edited_in_interval(cursor, interval, last_interval)
+            q[interval]['cumulative_unique_edited'] = self.unique_edited_in_interval(cursor, interval, None)
+            q[interval]['cumulative_total_edited'] = self.total_edited_in_interval(cursor, interval, None)
+
+            q[interval]['created_pages'] = self.pages_created_in_interval(cursor, interval, last_interval)
+
+            q[interval]['months'] = self.months_since(cursor, interval, last_interval) if last_interval else 6
+
+            last_interval = interval
+
+        return q
+
+        
+    def generate_report(self, q):
+        last_interval = None
+
+        headers = ["Interval", "Start", "Edited Pages", "% Pages Edited", "Page Edits", "% Edits", "Created Pages",
+                "Cumulative Edited Pages", "% Cumulative Pages Edited", "Cumulative Page Edits",
+                "% Cumulative Edits", "Months Since Last", "% Pages Edited/Month", "% Edits/Month"]
+        print("|".join(headers))
+
+        row_data = ["Total", "", q['count'], 100, q['edits'], 100, "-", "-", "-", "-"]  
+        print("|".join(str(x) for x in row_data))
+
+        for interval in intervals:
+            i = q[interval]
+            months = i['months'] if last_interval else 6
+            row_data = [
+                f"{interval} ago",
+                f"{f'until {last_interval} ago' if last_interval else 'today'}",
+                i['unique_edited'],
+                round(i['unique_edited'] * 100 / q['count'], 2),
+                i['total_edited'],
+                round(i['total_edited'] * 100 / q['edits'], 2),
+                i['created_pages'],
+
+                i['cumulative_unique_edited'],
+                round(i['cumulative_unique_edited'] * 100 / q['count'], 2),
+                i['cumulative_total_edited'],
+                round(i['cumulative_total_edited'] * 100 / q['edits'], 2),
+
+                months if months else "-",
+                round(i['unique_edited'] * 100 / q['count'] / months, 2) if months else "-",
+                round(q[interval]['total_edited'] * 100 / q['edits'] / months, 2) if months else "-"
+            ]
+
+            print("|".join(str(x) for x in row_data))
+
+            last_interval = interval
+        print("""
+
+* 'Edited Pages' is the number of pages that have been edited in the given interval.
+"* 'Page Edits' is the total number of edits made in the given interval.")
+"* 'Created Pages' is the number of pages created in the given interval.")
+"* 'Cumulative Edited Pages' is the number of pages that have been edited since the beginning of the wiki.")
+"* 'Cumulative Page Edits' is the total number of edits made since the beginning of the wiki.")
+"* 'Months Since Last' is calculated as the number of months between the start of the current interval and the start of the previous interval.")
+"* '/Month' calculations divide totals by the number of months in the interval.
+""")
   
     def close_connection(self):
         if hasattr(self, 'cursor') and self.cursor:
@@ -175,3 +211,9 @@ AND page_is_redirect = 0
 AND page_touched >= DATE_SUB(CURDATE(), INTERVAL {interval}) 
 {f"AND page_touched < DATE_SUB(CURDATE(), INTERVAL {prev_interval})" if prev_interval else ""}
 """
+
+    def months_since(interval, last_interval):
+            return f"""SELECT PERIOD_DIFF(
+DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL {last_interval}), '%Y%m'), 
+DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL {interval}), '%Y%m')
+)"""

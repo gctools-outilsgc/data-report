@@ -2,9 +2,7 @@ import sys
 from wiki.gcwiki_stats import wiki_db 
 
 if __name__ == "__main__":
-    wiki = wiki_db()
-    # wiki.unedited_page_stats()
-    # set generate_only is true if the command line -g is passed
-    generate_only = True if "-g" in sys.argv else False
+    what_to_do = {"-g": "generate", "-p": "process"}.get(sys.argv[1], "execute") if len(sys.argv) > 1 else "execute"
 
-    wiki.edited_with_percent_count()
+    wiki_report = wiki_db()
+    wiki_report.generate_edit_report(what_to_do)
