@@ -1,7 +1,11 @@
 import json
 import subprocess
 
-mysql_query = "sudo mysql --batch" # "echo 1" 
+
+db = 'wikidb'
+debug = True
+
+mysql_query = f"sudo mysql --batch -N {db}" # "echo 1" 
 
 def execute_queries_from_file(input_filename, output_filename):
     with open(input_filename, 'r') as f:
@@ -13,7 +17,11 @@ def execute_queries_from_file(input_filename, output_filename):
                 if "query" in value:
                     query = value["query"].replace('"', '\\"')
                     command = f"echo \"{query}\" | {mysql_query}"
-                    result = subprocess.check_output(command, shell=True).decode('utf-8').strip()
+                    if debug:
+                        print (command)
+                        result = '1'
+                    else:
+                        result = subprocess.check_output(command, shell=True).decode('utf-8').strip()
                     print(f"Executed: {key}: {result}")
                     data[key] = {"value": result}
                 else:

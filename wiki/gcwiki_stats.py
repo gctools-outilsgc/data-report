@@ -4,8 +4,9 @@ from . import kube_connect
 
 import json
 
-intervals = ["6 MONTH", "1 YEAR", "2 YEAR", "3 YEAR", "4 YEAR", "5 YEAR", "10 YEAR"]
+intervals = ["6 MONTH", "1 YEAR", "2 YEAR", "3 YEAR", "4 YEAR", "5 YEAR", "10 YEAR", "20 YEAR"]
 report_file = 'report_data.json'
+processed_file = 'processed_report_data.json'
 
 class print_cursor:
     query = None
@@ -57,6 +58,18 @@ class wiki_db:
     def months_since(self, cursor, interval, last_interval):
         return self.query_first(cursor, queries.months_since(interval, last_interval))
 
+    def move_value_to_parent(self, data):
+        if isinstance(data, dict):
+            for key, value in list(data.items()):  # Use list() to avoid modifying dict during iteration
+                if isinstance(value, dict) and "value" in value:
+                    data[key] = float(value["value"])
+                else:
+                    self.move_value_to_parent(value)
+        elif isinstance(data, list):
+            for item in data:
+                self.move_value_to_parent(item)
+        return data
+
     def generate_edit_report(self, what_to_do):
         print(f"Generating report step {what_to_do}")
         if what_to_do == 'generate':
@@ -67,8 +80,9 @@ class wiki_db:
                 return
 
         if what_to_do == 'process':
-            with open(report_file, 'r') as f:
-                data = json.load(f)
+            with open(processed_file, 'r') as f:
+                data = self.move_value_to_parent(json.load(f))
+                print(f"{data}")
                 self.generate_report(data)
                 return
 
