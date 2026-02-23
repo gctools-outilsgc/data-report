@@ -5,7 +5,7 @@ import socket
 class db_connection:
     
     def __init__(self):
-        db_command = "kubectl port-forward -n message message-db-mongodb-replicaset-0 27017:27017 --context messageAKSprod-admin"
+        db_command = "kubectl port-forward -n message message-db 27017:27017 --context AKS-collab-29-admin"
         self.port = 27017
     
         self.connect_to_database(db_command)
@@ -26,3 +26,4 @@ class db_connection:
         return 1
 
         
+
